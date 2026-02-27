@@ -37,20 +37,31 @@ def resetMonthlyFlagIfNewMonth(def script) {
 
 def handleFailure(def script) {
     if (isMonthlyTaskDue(script)) {
-        script.echo 'Build failed while monthly task was due — scheduling retry tomorrow at 06:00...'
+        script.echo 'Monthly task failed — retry flag set. Will retry on next build.'
         writeRetryFlag(script)
-        def tomorrow = new Date() + 1
-        def cronExpr = tomorrow.format('0 6 d M') + ' *'
-        script.echo 'Retry cron: ' + cronExpr
-        script.properties([
-            script.pipelineTriggers([
-                script.cron(cronExpr)
-            ])
-        ])
     } else {
         script.echo 'Not the monthly run day — no retry scheduled.'
     }
 }
+
+
+
+//def handleFailure(def script) {
+//    if (isMonthlyTaskDue(script)) {
+//        script.echo 'Build failed while monthly task was due — scheduling retry tomorrow at 06:00...'
+//        writeRetryFlag(script)
+//        def tomorrow = new Date() + 1
+//        def cronExpr = tomorrow.format('0 6 d M') + ' *'
+//        script.echo 'Retry cron: ' + cronExpr
+//        script.properties([
+//            script.pipelineTriggers([
+//                script.cron(cronExpr)
+//            ])
+//        ])
+//    } else {
+//        script.echo 'Not the monthly run day — no retry scheduled.'
+//    }
+//}
 
 def clearAll(def script) {
     clearRetryFlag(script)
