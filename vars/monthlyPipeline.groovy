@@ -1,27 +1,3 @@
-// ─── Flag file paths ──────────────────────────────────────────
-
-def retryFlagPath(def script) {
-    return script.env.JENKINS_HOME + '/jobs/' + script.env.JOB_NAME + '/monthly_retry.flag'
-}
-
-def retryFlagExists(def script) {
-    return script.fileExists(retryFlagPath(script))
-}
-
-def writeRetryFlag(def script) {
-    def f = retryFlagPath(script)
-    script.sh "mkdir -p \"\$(dirname '" + f + "')\" && touch '" + f + "'"
-}
-
-def clearRetryFlag(def script) {
-    def f = retryFlagPath(script)
-    if (script.fileExists(f)) {
-        script.sh "rm -f '" + f + "'"
-    }
-}
-
-// ─── Core logic ───────────────────────────────────────────────
-
 def isMonthlyTaskDue(def script) {
     if (retryFlagExists(script)) {
         script.echo 'Retry flag found — monthly task is pending.'
@@ -39,12 +15,11 @@ def isMonthlyTaskDue(def script) {
 
 def handleFailure(def script) {
     if (isMonthlyTaskDue(script)) {
-        script.echo 'Build failed on monthly run day — scheduling retry...'
+        script.echo 'Build failed on monthly run day — scheduling retry tomorrow...'
         writeRetryFlag(script)
 
-        def retryIntervalMinutes = script.env.RETRY_INTERVAL_MIN.toInteger()
-        def retryTime = new Date(System.currentTimeMillis() + (retryIntervalMinutes * 60 * 1000))
-        def cronExpr  = retryTime.format('m H d M') + ' *'
+        def tomorrow = new Date() + 1
+        def cronExpr = tomorrow.format('0 6 d M') + ' *'
 
         script.echo 'Retry cron: ' + cronExpr
         script.properties([
@@ -63,4 +38,26 @@ def clearAll(def script) {
         script.pipelineTriggers([])
     ])
     script.echo 'All flags and triggers cleared.'
+}
+
+// ─── Flag helpers ─────────────────────────────────────────────
+
+private def retryFlagPath(def script) {
+    return script.env.JENKINS_HOME + '/jobs/' + script.env.JOB_NAME + '/monthly_retry.flag'
+}
+
+private def retryFlagExists(def script) {
+    return script.fileExists(retryFlagPath(script))
+}
+
+private def writeRetryFlag(def script) {
+    def f = retryFlagPath(script)
+    script.sh "mkdir -p \"\$(dirname '" + f + "')\" && touch '" + f + "'"
+}
+
+private def clearRetryFlag(def script) {
+    def f = retryFlagPath(script)
+    if (script.fileExists(f)) {
+        script.sh "rm -f '" + f + "'"
+    }
 }
