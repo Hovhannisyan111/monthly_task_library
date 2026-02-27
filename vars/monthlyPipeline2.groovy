@@ -1,4 +1,8 @@
 def isMonthlyTaskDue(def script) {
+    if (executedThisMonthFlagExists(script)) {
+        script.echo 'Monthly task already ran successfully this month — skipping.'
+        return false
+    }
     if (retryFlagExists(script)) {
         script.echo 'Retry flag found — monthly task is pending.'
         return true
@@ -9,6 +13,7 @@ def isMonthlyTaskDue(def script) {
         script.echo 'Today is day ' + today + ' — monthly task is due.'
         return true
     }
+
     if (today > targetDay && !executedThisMonthFlagExists(script)) {
         script.echo 'Past day ' + targetDay + ' with no successful run this month — task is overdue.'
         return true
