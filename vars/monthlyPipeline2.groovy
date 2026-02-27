@@ -1,5 +1,4 @@
 def isMonthlyTaskDue(def script) {
-    // Retry pending from a previous failed attempt
     if (retryFlagExists(script)) {
         script.echo 'Retry flag found — monthly task is pending.'
         return true
@@ -7,20 +6,30 @@ def isMonthlyTaskDue(def script) {
     def today     = new Date().format('d').toInteger()
     def targetDay = script.env.MONTHLY_DAY.toInteger()
 
-    // It's the scheduled day
     if (today == targetDay) {
         script.echo 'Today is day ' + today + ' — monthly task is due.'
         return true
     }
 
-    // Passed the scheduled day this month but never ran successfully
     if (today > targetDay && !executedThisMonthFlagExists(script)) {
-        script.echo 'Passed day ' + targetDay + ' without successful run — monthly task is overdue.'
+        script.echo 'Past day ' + targetDay + ' with no successful run this month — task is overdue.'
         return true
     }
 
     script.echo 'Monthly task not due (today=' + today + ', target=' + targetDay + ').'
     return false
+}
+
+def resetMonthlyFlagIfNewMonth(def script) {
+    if (!script.fileExists(executedFlagPath(script))) {
+        return
+    }
+    def flagMonth = script.readFile(executedFlagPath(script)).trim()
+    def thisMonth = new Date().format('MM-yyyy')
+    if (flagMonth != thisMonth) {
+        script.echo 'New month detected (' + flagMonth + ' → ' + thisMonth + ') — resetting executed flag.'
+        script.sh "rm -f '" + executedFlagPath(script) + "'"
+    }
 }
 
 def handleFailure(def script) {
@@ -44,25 +53,11 @@ def handleFailure(def script) {
 
 def clearAll(def script) {
     clearRetryFlag(script)
-    writeExecutedThisMonthFlag(script)   // mark as done for this month
+    writeExecutedThisMonthFlag(script)
     script.properties([
         script.pipelineTriggers([])
     ])
     script.echo 'Monthly task succeeded. Flags updated, triggers cleared.'
-}
-
-// Called once a month (e.g. in a housekeeping job or first build of new month)
-// to reset the executed flag so next month's run is allowed.
-// Automatically handled inside isMonthlyTaskDue when the month rolls over.
-def resetMonthlyFlagIfNewMonth(def script) {
-    if (executedThisMonthFlagExists(script)) {
-        def flagMonth  = readExecutedMonthFlag(script)
-        def thisMonth  = new Date().format('MM-yyyy')
-        if (flagMonth != thisMonth) {
-            script.echo 'New month detected — resetting executed flag.'
-            clearExecutedThisMonthFlag(script)
-        }
-    }
 }
 
 // ─── Retry flag ───────────────────────────────────────────────
@@ -88,8 +83,6 @@ private def clearRetryFlag(def script) {
 }
 
 // ─── Executed-this-month flag ─────────────────────────────────
-// Contains the month it ran (e.g. "02-2026") so we can detect
-// when a new month starts and reset it automatically.
 
 private def executedFlagPath(def script) {
     return script.env.JENKINS_HOME + '/jobs/' + script.env.JOB_NAME + '/monthly_executed.flag'
@@ -99,24 +92,13 @@ private def executedThisMonthFlagExists(def script) {
     if (!script.fileExists(executedFlagPath(script))) {
         return false
     }
-    def flagMonth = readExecutedMonthFlag(script)
+    def flagMonth = script.readFile(executedFlagPath(script)).trim()
     def thisMonth = new Date().format('MM-yyyy')
     return flagMonth == thisMonth
-}
-
-private def readExecutedMonthFlag(def script) {
-    return script.readFile(executedFlagPath(script)).trim()
 }
 
 private def writeExecutedThisMonthFlag(def script) {
     def f         = executedFlagPath(script)
     def thisMonth = new Date().format('MM-yyyy')
     script.sh "mkdir -p \"\$(dirname '" + f + "')\" && echo '" + thisMonth + "' > '" + f + "'"
-}
-
-private def clearExecutedThisMonthFlag(def script) {
-    def f = executedFlagPath(script)
-    if (script.fileExists(f)) {
-        script.sh "rm -f '" + f + "'"
-    }
 }
