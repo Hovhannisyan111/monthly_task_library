@@ -13,6 +13,7 @@ def isMonthlyTaskDue(def script) {
         script.echo 'Today is day ' + today + ' — monthly task is due.'
         return true
     }
+
     if (today > targetDay && !executedThisMonthFlagExists(script)) {
         script.echo 'Past day ' + targetDay + ' with no successful run this month — task is overdue.'
         return true
@@ -22,27 +23,15 @@ def isMonthlyTaskDue(def script) {
 }
 
 def resetMonthlyFlagIfNewMonth(def script) {
-    def executedF = executedFlagPath(script)
-    def retryF    = retryFlagPath(script)
-    def thisMonth = new Date().format('MM-yyyy')
-
-    // Reset executed flag if it's from a previous month
-    if (script.fileExists(executedF)) {
-        def flagMonth = script.readFile(executedF).trim()
-        if (flagMonth != thisMonth) {
-            script.echo 'New month detected (' + flagMonth + ' -> ' + thisMonth + ') — resetting executed flag.'
-            script.sh "rm -f '" + executedF + "'"
-        }
+    def f = executedFlagPath(script)
+    if (!script.fileExists(f)) {
+        return
     }
-
-    // Clear retry flag if it's stale (from a previous month)
-    if (script.fileExists(retryF)) {
-        def flagAge   = script.sh(returnStdout: true, script: "stat -c %y '" + retryF + "' | cut -d'-' -f1,2").trim()
-        def thisMonthStat = new Date().format('yyyy-MM')
-        if (flagAge != thisMonthStat) {
-            script.echo 'Stale retry flag from ' + flagAge + ' — clearing.'
-            script.sh "rm -f '" + retryF + "'"
-        }
+    def flagMonth = script.readFile(f).trim()
+    def thisMonth = new Date().format('MM-yyyy')
+    if (flagMonth != thisMonth) {
+        script.echo 'New month detected (' + flagMonth + ' -> ' + thisMonth + ') — resetting executed flag.'
+        script.sh "rm -f '" + f + "'"
     }
 }
 
@@ -51,9 +40,28 @@ def handleFailure(def script) {
         script.echo 'Monthly task failed — retry flag set. Will retry on next build.'
         writeRetryFlag(script)
     } else {
-        script.echo 'Not the monthly run day — no retry needed.'
+        script.echo 'Not the monthly run day — no retry scheduled.'
     }
 }
+
+
+
+//def handleFailure(def script) {
+//    if (isMonthlyTaskDue(script)) {
+//        script.echo 'Build failed while monthly task was due — scheduling retry tomorrow at 06:00...'
+//        writeRetryFlag(script)
+//        def tomorrow = new Date() + 1
+//        def cronExpr = tomorrow.format('0 6 d M') + ' *'
+//        script.echo 'Retry cron: ' + cronExpr
+//        script.properties([
+//            script.pipelineTriggers([
+//                script.cron(cronExpr)
+//            ])
+//        ])
+//    } else {
+//        script.echo 'Not the monthly run day — no retry scheduled.'
+//    }
+//}
 
 def clearAll(def script) {
     clearRetryFlag(script)
@@ -72,9 +80,8 @@ def retryFlagExists(def script) {
 }
 
 def writeRetryFlag(def script) {
-    def f       = retryFlagPath(script)
-    def content = 'build=' + script.env.BUILD_NUMBER + ' date=' + new Date().format('yyyy-MM-dd HH:mm')
-    script.sh "mkdir -p \"\$(dirname '" + f + "')\" && echo '" + content + "' > '" + f + "'"
+    def f = retryFlagPath(script)
+    script.sh "mkdir -p \"\$(dirname '" + f + "')\" && touch '" + f + "'"
 }
 
 def clearRetryFlag(def script) {
