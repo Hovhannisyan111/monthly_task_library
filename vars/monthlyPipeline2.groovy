@@ -3,6 +3,7 @@ def isMonthlyTaskDue(def script) {
         script.echo 'Retry flag found — monthly task is pending.'
         return true
     }
+
     def today     = new Date().format('d').toInteger()
     def targetDay = script.env.MONTHLY_DAY.toInteger()
 
@@ -21,14 +22,15 @@ def isMonthlyTaskDue(def script) {
 }
 
 def resetMonthlyFlagIfNewMonth(def script) {
-    if (!script.fileExists(executedFlagPath(script))) {
+    def f = executedFlagPath(script)
+    if (!script.fileExists(f)) {
         return
     }
-    def flagMonth = script.readFile(executedFlagPath(script)).trim()
+    def flagMonth = script.readFile(f).trim()
     def thisMonth = new Date().format('MM-yyyy')
     if (flagMonth != thisMonth) {
-        script.echo 'New month detected (' + flagMonth + ' → ' + thisMonth + ') — resetting executed flag.'
-        script.sh "rm -f '" + executedFlagPath(script) + "'"
+        script.echo 'New month detected (' + flagMonth + ' -> ' + thisMonth + ') — resetting executed flag.'
+        script.sh "rm -f '" + f + "'"
     }
 }
 
@@ -62,20 +64,20 @@ def clearAll(def script) {
 
 // ─── Retry flag ───────────────────────────────────────────────
 
-private def retryFlagPath(def script) {
+def retryFlagPath(def script) {
     return script.env.JENKINS_HOME + '/jobs/' + script.env.JOB_NAME + '/monthly_retry.flag'
 }
 
-private def retryFlagExists(def script) {
+def retryFlagExists(def script) {
     return script.fileExists(retryFlagPath(script))
 }
 
-private def writeRetryFlag(def script) {
+def writeRetryFlag(def script) {
     def f = retryFlagPath(script)
     script.sh "mkdir -p \"\$(dirname '" + f + "')\" && touch '" + f + "'"
 }
 
-private def clearRetryFlag(def script) {
+def clearRetryFlag(def script) {
     def f = retryFlagPath(script)
     if (script.fileExists(f)) {
         script.sh "rm -f '" + f + "'"
@@ -84,20 +86,21 @@ private def clearRetryFlag(def script) {
 
 // ─── Executed-this-month flag ─────────────────────────────────
 
-private def executedFlagPath(def script) {
+def executedFlagPath(def script) {
     return script.env.JENKINS_HOME + '/jobs/' + script.env.JOB_NAME + '/monthly_executed.flag'
 }
 
-private def executedThisMonthFlagExists(def script) {
-    if (!script.fileExists(executedFlagPath(script))) {
+def executedThisMonthFlagExists(def script) {
+    def f = executedFlagPath(script)
+    if (!script.fileExists(f)) {
         return false
     }
-    def flagMonth = script.readFile(executedFlagPath(script)).trim()
+    def flagMonth = script.readFile(f).trim()
     def thisMonth = new Date().format('MM-yyyy')
     return flagMonth == thisMonth
 }
 
-private def writeExecutedThisMonthFlag(def script) {
+def writeExecutedThisMonthFlag(def script) {
     def f         = executedFlagPath(script)
     def thisMonth = new Date().format('MM-yyyy')
     script.sh "mkdir -p \"\$(dirname '" + f + "')\" && echo '" + thisMonth + "' > '" + f + "'"
