@@ -1,64 +1,66 @@
-import org.pipeline.MonthlyPipelineManager
+// ─── Flag file paths ──────────────────────────────────────────
 
-def init(def script) {
-    return new MonthlyPipelineManager(script)
+def retryFlagPath(def script) {
+    return script.env.JENKINS_HOME + '/jobs/' + script.env.JOB_NAME + '/monthly_retry.flag'
 }
 
-class MonthlyPipelineManager implements Serializable {
+def retryFlagExists(def script) {
+    return script.fileExists(retryFlagPath(script))
+}
 
-    private final def script
-    private final FlagFileManager flagManager
-    private final int targetDay
-    private final int retryIntervalMinutes
+def writeRetryFlag(def script) {
+    def f = retryFlagPath(script)
+    script.sh "mkdir -p \"\$(dirname '" + f + "')\" && touch '" + f + "'"
+}
 
-    MonthlyPipelineManager(def script) {
-        this.script               = script
-        this.flagManager          = new FlagFileManager(script)
-        this.targetDay            = script.env.MONTHLY_DAY.toInteger()
-        this.retryIntervalMinutes = script.env.RETRY_INTERVAL_MIN.toInteger()
+def clearRetryFlag(def script) {
+    def f = retryFlagPath(script)
+    if (script.fileExists(f)) {
+        script.sh "rm -f '" + f + "'"
     }
+}
 
-    // Is today the monthly run day, or is a retry pending?
-    boolean isMonthlyTaskDue() {
-        if (flagManager.retryFlagExists()) {
-            script.echo 'Retry flag found — monthly task is pending.'
-            return true
-        }
-        def today     = new Date().format('d').toInteger()
-        if (today == targetDay) {
-            script.echo "Today is day " + today + " — monthly task is due."
-            return true
-        }
-        script.echo "Monthly task not due (today=" + today + ", target=" + targetDay + ")."
-        return false
+// ─── Core logic ───────────────────────────────────────────────
+
+def isMonthlyTaskDue(def script) {
+    if (retryFlagExists(script)) {
+        script.echo 'Retry flag found — monthly task is pending.'
+        return true
     }
-
-    // Called in post { failure } — only reschedules if it was the monthly day
-    void handleFailure() {
-        if (isMonthlyTaskDue()) {
-            script.echo "Build failed on monthly run day — scheduling retry..."
-            flagManager.writeRetryFlag()
-
-            def retryTime = new Date(System.currentTimeMillis() + (retryIntervalMinutes * 60 * 1000))
-            def cronExpr  = retryTime.format('m H d M') + ' *'
-
-            script.echo "Retry cron: " + cronExpr
-            script.properties([
-                script.pipelineTriggers([
-                    script.cron(cronExpr)
-                ])
-            ])
-        } else {
-            script.echo "Not the monthly run day — no retry scheduled."
-        }
+    def today     = new Date().format('d').toInteger()
+    def targetDay = script.env.MONTHLY_DAY.toInteger()
+    if (today == targetDay) {
+        script.echo 'Today is day ' + today + ' — monthly task is due.'
+        return true
     }
+    script.echo 'Monthly task not due (today=' + today + ', target=' + targetDay + ').'
+    return false
+}
 
-    // Called in post { success } — clears everything
-    void clearAll() {
-        flagManager.clearRetryFlag()
+def handleFailure(def script) {
+    if (isMonthlyTaskDue(script)) {
+        script.echo 'Build failed on monthly run day — scheduling retry...'
+        writeRetryFlag(script)
+
+        def retryIntervalMinutes = script.env.RETRY_INTERVAL_MIN.toInteger()
+        def retryTime = new Date(System.currentTimeMillis() + (retryIntervalMinutes * 60 * 1000))
+        def cronExpr  = retryTime.format('m H d M') + ' *'
+
+        script.echo 'Retry cron: ' + cronExpr
         script.properties([
-            script.pipelineTriggers([])
+            script.pipelineTriggers([
+                script.cron(cronExpr)
+            ])
         ])
-        script.echo "All flags and triggers cleared."
+    } else {
+        script.echo 'Not the monthly run day — no retry scheduled.'
     }
+}
+
+def clearAll(def script) {
+    clearRetryFlag(script)
+    script.properties([
+        script.pipelineTriggers([])
+    ])
+    script.echo 'All flags and triggers cleared.'
 }
