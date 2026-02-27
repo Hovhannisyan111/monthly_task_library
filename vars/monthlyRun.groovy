@@ -1,4 +1,4 @@
-import FlagFileManager
+import org.pipeline.MonthlyPipelineManager
 
 def init(def script) {
     return new MonthlyPipelineManager(script)
